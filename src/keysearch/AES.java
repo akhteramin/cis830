@@ -57,7 +57,7 @@ public class AES {
             return new String(cipher.doFinal(Base64.getDecoder().decode(strToDecrypt)));
         }
         catch (Exception e) {
-            System.out.println("Error while decrypting: " + e.toString());
+//            System.out.println("Error while decrypting: " + e.toString());
         }
         return null;
     }
