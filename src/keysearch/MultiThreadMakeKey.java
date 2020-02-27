@@ -75,6 +75,12 @@ public class MultiThreadMakeKey {
 
         byte[] keyArray = SecureRandom.getSeed(32);
 //        final String secretKey = keyArray.toString();
+        for(int i=0;i<32;i++){
+            keyArray[i] =  (byte) Math.sqrt(keyArray[i]*keyArray[i]);
+        }
+        System.out.println(keyArray[31]);
+        String s2 = String.format("%8s", Integer.toBinaryString(keyArray[31] & 0xFF)).replace(' ', '0');
+        System.out.println(s2);
 
         String secretKey = new String(keyArray, StandardCharsets.UTF_8);
 
@@ -84,16 +90,24 @@ public class MultiThreadMakeKey {
         for(int i=(32-(numOfBytes/8));i<32;i++){
             Array.setByte(keyArray, i,  (byte) 0);
         }
+        if(numOfBytes%8!=0){
+            byte temp=(byte) 255;
+            keyArray[31-(numOfBytes/8)] &=  (byte)(temp << (numOfBytes%8));
+        }
+        System.out.println(keyArray[31]);
+        String s3 = String.format("%8s", Integer.toBinaryString(keyArray[31] & 0xFF)).replace(' ', '0');
+        System.out.println(s3);
 
         byte[] trialkey = new byte[32];
         System.arraycopy(keyArray,0,trialkey,0,32);
 
 
         long start = System.currentTimeMillis();
-        maxcounter = (1 <<numOfBytes)-1;
 
+        maxcounter = (1 <<numOfBytes)-1;
         // Try every possible combination of low-order key bits.
-        // omp parallel for
+
+        // omp parallel for threadNum(8)
         for(int counter = 0; counter < maxcounter; ++counter) {
             // Fill in low-order key bits.
             // Try the key.
@@ -101,15 +115,17 @@ public class MultiThreadMakeKey {
             int lsbs = keylsbs | counter;
 
             for(int indx=0;indx<numOfBytes/8;indx++){
-                trialkey[31-indx] = (byte) (lsbs);
+
+                trialkey[31-indx] = (byte) (lsbs >>> indx*8);
             }
+//            if(numOfBytes%8!=0){
+//                byte temp = (byte) 255;
+//                temp = (byte)(temp >>> (8-(numOfBytes%8)));
+//                temp &= (byte) (lsbs >>> 8*(numOfBytes/8));
+//                trialkey[31-(numOfBytes/8)] |= temp;
+//            }
 
-
-//            String s2 = String.format("%8s", Integer.toBinaryString(trialkey[30] & 0xFF)).replace(' ', '0');
-//            System.out.println(s2);
-//            String s3 = String.format("%8s", Integer.toBinaryString(trialkey[31] & 0xFF)).replace(' ', '0');
-//            System.out.println(s3);
-//            System.out.println("\n");
+            System.out.println(lsbs+" "+trialkey[31]);
 
 
             String dynamicsecretKey= new String(trialkey, StandardCharsets.UTF_8);
@@ -117,10 +133,11 @@ public class MultiThreadMakeKey {
 
             try {
                 if (originalString.compareTo(dynamicdecryptedString)==0) {
-                    System.out.println("found:"+dynamicdecryptedString);
+                    System.out.println("found: "+dynamicdecryptedString+" "+lsbs);
                     long end = System.currentTimeMillis();
                     long elapsedTime = end - start;
                     System.out.println("Elapsed time::"+String.valueOf(elapsedTime)+" ms");
+                    Thread.currentThread().interrupt();
                 }
             }
             catch (NullPointerException e){

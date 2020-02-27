@@ -72,6 +72,11 @@ public class MakeKey {
 
         byte[] keyArray = SecureRandom.getSeed(32);
 //        final String secretKey = keyArray.toString();
+        for(int i=31;i<32;i++){
+            keyArray[31] =  (byte) Math.sqrt(keyArray[31]*keyArray[31]);
+        }
+        keyArray[31] = 127;
+
 
         String secretKey = new String(keyArray, StandardCharsets.UTF_8);
 
@@ -111,11 +116,12 @@ public class MakeKey {
 
             try {
                 if (originalString.compareTo(dynamicdecryptedString)==0) {
-                    System.out.println("found:"+dynamicdecryptedString);
+                    System.out.println("found:"+dynamicdecryptedString+" lsbs:"+lsbs);
+
                     long end = System.currentTimeMillis();
                     long elapsedTime = end - start;
                     System.out.println("Elapsed time::"+String.valueOf(elapsedTime)+" ms");
-                    break;
+//                    break;
                 }
             }
             catch (NullPointerException e){
