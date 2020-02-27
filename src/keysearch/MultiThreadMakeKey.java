@@ -10,33 +10,29 @@ import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.spec.KeySpec;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.*;
 
 
 public class MultiThreadMakeKey {
-    static int keylsbs, maxcounter;
-    private static byte[] key;
-    private static String salt = "privatesalt";
+    static int keylsbs=0, maxcounter;
+//    private static byte[] key;
+//    private static String salt = "privatesalt";
 
-    public static String encrypt(String strToEncrypt, String secret)
+
+    public static String encrypt(String strToEncrypt, byte[] secret)
     {
         try
         {
-            byte[] iv = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            IvParameterSpec ivspec = new IvParameterSpec(iv);
+            SecretKeySpec sskey= new SecretKeySpec(secret, "AES");
 
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec spec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), 65536, 256);
-            SecretKey tmp = factory.generateSecret(spec);
-            SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
+            Cipher c = Cipher.getInstance("AES");
 
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
-            return Base64.getEncoder().encodeToString(cipher.doFinal(strToEncrypt.getBytes("UTF-8")));
+            c.init(Cipher.ENCRYPT_MODE, sskey);
+
+            byte[] encrypted = c.doFinal(strToEncrypt.getBytes());
+//            System.out.println("encrypted string: " + encrypted.toString());
+            return Base64.getEncoder().encodeToString(encrypted);
         }
         catch (Exception e)
         {
@@ -45,47 +41,26 @@ public class MultiThreadMakeKey {
         return null;
     }
 
-    public static String decrypt(String strToDecrypt, String secret) {
-        try
-        {
-            byte[] iv = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            IvParameterSpec ivspec = new IvParameterSpec(iv);
 
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec spec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), 65536, 256);
-            SecretKey tmp = factory.generateSecret(spec);
-            SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
-
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
-            return new String(cipher.doFinal(Base64.getDecoder().decode(strToDecrypt)));
-        }
-        catch (Exception e) {
-//            System.out.println("Error while decrypting: " + e.toString());
-        }
-        return null;
-    }
 
     public static void main(String args[]) {
-        System.out.println(args[0]);
+//        System.out.println(args[0]);
 
         String originalString = args[0];
         int numOfBytes = Integer.parseInt(args[1]);
 
 
         byte[] keyArray = SecureRandom.getSeed(32);
-//        final String secretKey = keyArray.toString();
-        for(int i=0;i<32;i++){
-            keyArray[i] =  (byte) Math.sqrt(keyArray[i]*keyArray[i]);
+
+
+//        String secretKey = new String(keyArray, StandardCharsets.UTF_8);
+
+
+        String encryptedString = encrypt(originalString, keyArray);
+        for(int i=0;i<(numOfBytes/8);i++){
+            keylsbs |= ((keyArray[31-i] & 0xFF)<< 8*(i+1));
         }
-        System.out.println(keyArray[31]);
-        String s2 = String.format("%8s", Integer.toBinaryString(keyArray[31] & 0xFF)).replace(' ', '0');
-        System.out.println(s2);
-
-        String secretKey = new String(keyArray, StandardCharsets.UTF_8);
-
-
-        String encryptedString = encrypt(originalString, secretKey);
+        System.out.println(keyArray[30]+" "+keyArray[31]);
 
         for(int i=(32-(numOfBytes/8));i<32;i++){
             Array.setByte(keyArray, i,  (byte) 0);
@@ -94,9 +69,9 @@ public class MultiThreadMakeKey {
             byte temp=(byte) 255;
             keyArray[31-(numOfBytes/8)] &=  (byte)(temp << (numOfBytes%8));
         }
-        System.out.println(keyArray[31]);
-        String s3 = String.format("%8s", Integer.toBinaryString(keyArray[31] & 0xFF)).replace(' ', '0');
-        System.out.println(s3);
+//        System.out.println(keyArray[31]);
+//        String s3 = String.format("%8s", Integer.toBinaryString(keyArray[31] & 0xFF)).replace(' ', '0');
+//        System.out.println(s3);
 
         byte[] trialkey = new byte[32];
         System.arraycopy(keyArray,0,trialkey,0,32);
@@ -107,10 +82,11 @@ public class MultiThreadMakeKey {
         maxcounter = (1 <<numOfBytes)-1;
         // Try every possible combination of low-order key bits.
 
-        // omp parallel for threadNum(8)
+        // omp parallel for
         for(int counter = 0; counter < maxcounter; ++counter) {
             // Fill in low-order key bits.
             // Try the key.
+
 
             int lsbs = keylsbs | counter;
 
@@ -118,26 +94,25 @@ public class MultiThreadMakeKey {
 
                 trialkey[31-indx] = (byte) (lsbs >>> indx*8);
             }
-//            if(numOfBytes%8!=0){
-//                byte temp = (byte) 255;
-//                temp = (byte)(temp >>> (8-(numOfBytes%8)));
-//                temp &= (byte) (lsbs >>> 8*(numOfBytes/8));
-//                trialkey[31-(numOfBytes/8)] |= temp;
-//            }
-
-            System.out.println(lsbs+" "+trialkey[31]);
 
 
-            String dynamicsecretKey= new String(trialkey, StandardCharsets.UTF_8);
-            String dynamicdecryptedString = decrypt(encryptedString, dynamicsecretKey);
+
+//            String dynamicsecretKey= new String(trialkey, StandardCharsets.UTF_8);
+            String dynamicdecryptedString = encrypt(originalString, trialkey);
+            System.out.println("Running:"+trialkey[30]+" "+trialkey[31]);
+
 
             try {
-                if (originalString.compareTo(dynamicdecryptedString)==0) {
-                    System.out.println("found: "+dynamicdecryptedString+" "+lsbs);
+                if (encryptedString.compareTo(dynamicdecryptedString)==0) {
+
+                    System.out.println("found: "+dynamicdecryptedString+" "+trialkey[30]+" "+trialkey[31]);
                     long end = System.currentTimeMillis();
                     long elapsedTime = end - start;
                     System.out.println("Elapsed time::"+String.valueOf(elapsedTime)+" ms");
-                    Thread.currentThread().interrupt();
+                    Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+                    for (Thread thread : threadSet) { System.out.println(thread.getId()); thread.interrupt();}
+//                    threadSet.stream().findAny(t->t.getId()).ifPresent(Thread::interrupt);
+
                 }
             }
             catch (NullPointerException e){

@@ -1,9 +1,6 @@
 package keysearch;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
+import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -11,77 +8,52 @@ import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.spec.KeySpec;
+
 import java.util.Base64;
 import java.util.Scanner;
 
 
 public class MakeKey {
     static int keylsbs, maxcounter;
-    private static byte[] key;
-    private static String salt = "ssshhhhhhhhhhh!!!!";
+//    private static byte[] key;
+//    private static String salt = "ssshhhhhhhhhhh!!!!";
 
-    public static String encrypt(String strToEncrypt, String secret)
+    public static String encrypt(String strToEncrypt, byte[] secret)
     {
         try
         {
-            byte[] iv = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            IvParameterSpec ivspec = new IvParameterSpec(iv);
 
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec spec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), 65536, 256);
-            SecretKey tmp = factory.generateSecret(spec);
-            SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
+            SecretKeySpec sskey= new SecretKeySpec(secret, "AES");
 
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivspec);
-            return Base64.getEncoder().encodeToString(cipher.doFinal(strToEncrypt.getBytes("UTF-8")));
+            Cipher c = Cipher.getInstance("AES");
+
+            c.init(Cipher.ENCRYPT_MODE, sskey);
+
+            byte[] encrypted = c.doFinal(strToEncrypt.getBytes());
+//            System.out.println("encrypted string: " + encrypted.toString());
+            return Base64.getEncoder().encodeToString(encrypted);
+
         }
         catch (Exception e)
         {
-            System.out.println("Error while encrypting: " + e.toString());
-        }
-        return null;
-    }
-
-    public static String decrypt(String strToDecrypt, String secret) {
-        try
-        {
-            byte[] iv = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            IvParameterSpec ivspec = new IvParameterSpec(iv);
-
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec spec = new PBEKeySpec(secret.toCharArray(), salt.getBytes(), 65536, 256);
-            SecretKey tmp = factory.generateSecret(spec);
-            SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
-
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivspec);
-            return new String(cipher.doFinal(Base64.getDecoder().decode(strToDecrypt)));
-        }
-        catch (Exception e) {
-//            System.out.println("Error while decrypting: " + e.toString());
+//            System.out.println("Error while encrypting: " + e.toString());
         }
         return null;
     }
 
     public static void main(String args[]) {
-        Scanner stringObj = new Scanner(System.in);  // Create a Scanner object
-        System.out.println("Enter String:");
 
-        String originalString = stringObj.nextLine();
-
+        String originalString = "adlfhaksd";
         byte[] keyArray = SecureRandom.getSeed(32);
-//        final String secretKey = keyArray.toString();
-        for(int i=31;i<32;i++){
-            keyArray[31] =  (byte) Math.sqrt(keyArray[31]*keyArray[31]);
-        }
-        keyArray[31] = 127;
+
+        System.out.println(keyArray[31]);
+
+//        String secretKey = new String(keyArray, StandardCharsets.UTF_8);
 
 
-        String secretKey = new String(keyArray, StandardCharsets.UTF_8);
-
-
-        String encryptedString = encrypt(originalString, secretKey);
+        String encryptedString = encrypt(originalString, keyArray);
+        System.out.println(encryptedString);
+        keylsbs |= (keyArray[31] & 0xFF)<<8;
 
         for(int i=31;i<32;i++){
             Array.setByte(keyArray, i,  (byte) 0);
@@ -92,6 +64,7 @@ public class MakeKey {
 
 
         long start = System.currentTimeMillis();
+
         maxcounter = (1 <<8)-1;
 
         // Try every possible combination of low-order key bits.
@@ -109,19 +82,19 @@ public class MakeKey {
 //            String s3 = String.format("%8s", Integer.toBinaryString(trialkey[31] & 0xFF)).replace(' ', '0');
 //            System.out.println(s3);
 //            System.out.println("\n");
-
+            System.out.println(trialkey[31]);
 
             String dynamicsecretKey= new String(trialkey, StandardCharsets.UTF_8);
-            String dynamicdecryptedString = decrypt(encryptedString, dynamicsecretKey);
+            String dynamicdecryptedString = encrypt(originalString, trialkey);
 
             try {
-                if (originalString.compareTo(dynamicdecryptedString)==0) {
-                    System.out.println("found:"+dynamicdecryptedString+" lsbs:"+lsbs);
+                if (encryptedString.compareTo(dynamicdecryptedString)==0) {
+                    System.out.println("found:"+dynamicdecryptedString+" lsbs:"+trialkey[31]);
 
                     long end = System.currentTimeMillis();
                     long elapsedTime = end - start;
                     System.out.println("Elapsed time::"+String.valueOf(elapsedTime)+" ms");
-//                    break;
+                    break;
                 }
             }
             catch (NullPointerException e){
